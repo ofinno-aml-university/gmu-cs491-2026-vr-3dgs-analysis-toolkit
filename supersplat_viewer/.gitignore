@@ -1,0 +1,9 @@
+# 3DGS scenes are provided separately and are never committed
+3DGS_scenes/
+3DGS_scenes_converted/
+# HTTPS certificate and private key: create per computer with `node make_certificate.mjs`
+tls_self_signed/
+# generated from the built viewer at every server start
+viewer_site/viewer/index.html
+node_modules/
+.DS_Store

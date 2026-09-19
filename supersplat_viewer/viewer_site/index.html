@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3DGS scenes</title>
+    <style>
+        :root { color-scheme: dark; }
+        body { margin: 0; background: #101114; color: #e8e8e8; font: 18px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+        h1 { font-size: 28px; margin: 0 0 4px; }
+        p.lead { margin: 0 0 20px; color: #a9adb5; }
+        .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        button, a.button { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; border-radius: 10px; border: 1px solid #3a3d44; background: #1c1e23; color: #e8e8e8; font: inherit; text-decoration: none; cursor: pointer; }
+        a.button.primary { background: #f26722; border-color: #f26722; color: #fff; font-weight: 600; }
+        button.make { border-style: dashed; }
+        button:disabled { opacity: 0.6; cursor: default; }
+        a.button:hover, button:hover { filter: brightness(1.15); }
+        .card { background: #17191d; border: 1px solid #2a2d33; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+        .card h2 { font-size: 22px; margin: 0 0 4px; }
+        .meta { color: #a9adb5; font-size: 15px; margin-bottom: 12px; }
+        .meta a, .empty a { color: #8ab4f8; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .note { color: #f0b429; font-size: 15px; margin-top: 10px; }
+        .status { color: #a9adb5; font-size: 15px; }
+        .empty, .error { margin-bottom: 16px; padding: 24px; border: 1px dashed #3a3d44; border-radius: 14px; color: #a9adb5; }
+        .error { color: #ff8a80; }
+        footer { margin-top: 32px; color: #a9adb5; font-size: 15px; }
+        code { background: #23262c; padding: 1px 6px; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>3DGS scenes</h1>
+        <p class="lead">Pick a scene to open it in the SuperSplat viewer. Only the scene you open is loaded; opening another one replaces it.</p>
+        <div id="vrLink" class="empty" hidden></div>
+        <div class="toolbar">
+            <button id="reload" type="button">Reload list</button>
+            <span id="count" class="status"></span>
+        </div>
+        <div id="list"></div>
+        <footer>
+            <p><strong>Adding scenes:</strong> drop a <code>.ply</code> (or <code>.compressed.ply</code>, <code>.sog</code>) into the <code>3DGS_scenes</code> folder on the computer that runs the server, then press Reload list. A <code>.txt</code> with the same name (lines <code>Title:</code>, <code>Author:</code>, <code>License:</code>, <code>Source:</code>) becomes the caption.</p>
+            <p><strong>Apple headsets and phones:</strong> Safari does not let you click past the certificate warning the way the Quest browser does. Open <a href="/certificate/">the certificate page</a> once from the plain <code>http://</code> address (port 3080), install the certificate as described there, and the <code>https</code> address then opens normally.</p>
+            <p><strong>SOG option:</strong> the raw PLY is always the default. <em>Make SOG copy</em> asks the computer running the server to write a compact, lossy <code>.sog</code> copy of that PLY into <code>3DGS_scenes_converted</code> (seconds to a minute); it then shows up here as an extra <em>Open SOG</em> button. The same for every scene at once: <code>node convert_scenes_to_sog.mjs</code> on that computer.</p>
+        </footer>
+    </main>
+    <script src="/scene_catalog.js"></script>
+    <script>
+        (function () {
+            'use strict';
+            const catalog = window.sceneCatalog;
+            const list = document.getElementById('list');
+            const count = document.getElementById('count');
+
+            const el = (tag, className, text) => {
+                const e = document.createElement(tag);
+                if (className) e.className = className;
+                if (text !== undefined) e.textContent = text;
+                return e;
+            };
+
+            const openButton = (format, primary) => {
+                const size = format.size ? ` · ${format.size}` : '';
+                const a = el('a', primary ? 'button primary' : 'button', `Open ${format.label}${size}`);
+                a.href = catalog.viewerUrl(format);
+                return a;
+            };
+
+            const card = (scene) => {
+                const box = el('div', 'card');
+                box.append(el('h2', null, scene.title));
+
+                const bits = [];
+                if (scene.info.author) bits.push(`by ${scene.info.author.replace(/\s*\(https?:[^)]*\)/, '')}`);
+                if (scene.info.license) bits.push(scene.info.license);
+                if (bits.length || scene.info.source) {
+                    const meta = el('div', 'meta', bits.join(' · '));
+                    if (scene.info.source) {
+                        const a = el('a', null, 'source');
+                        a.href = scene.info.source;
+                        a.target = '_blank';
+                        a.rel = 'noopener';
+                        meta.append(bits.length ? ' · ' : '', a);
+                    }
+                    box.append(meta);
+                }
+
+                const row = el('div', 'row');
+                row.append(openButton(scene.primary, true));
+                for (const format of scene.options) row.append(openButton(format, false));
+                const raw = scene.formats.find((f) => f.kind === 'ply');
+                const hasSog = scene.formats.some((f) => f.kind === 'sog');
+                if (scene.converting) {
+                    row.append(el('span', 'status', 'converting to SOG…'));
+                } else if (raw && (!hasSog || scene.failed)) {
+                    const make = el('button', 'button make', scene.failed ? 'Retry SOG copy' : 'Make SOG copy');
+                    make.type = 'button';
+                    make.title = 'Writes a compact, lossy .sog copy on the computer running the server; the PLY is kept';
+                    make.addEventListener('click', () => requestSog(raw, make, row));
+                    row.append(make);
+                    if (scene.failed) row.append(el('span', 'status', `last conversion failed (see 3DGS_scenes_converted/${scene.stem}.failed.txt)`));
+                }
+                box.append(row);
+
+                if (raw && raw.bytes > catalog.LARGE_RAW_BYTES) {
+                    box.append(el('div', 'note', `Large raw PLY (${raw.size}): the Quest browser may run out of memory loading it. If that happens, use the SOG copy.`));
+                }
+                return box;
+            };
+
+            // ask the server to convert one PLY; the list then shows "converting…" and polls until done
+            const requestSog = async (raw, button, row) => {
+                button.disabled = true;
+                button.textContent = 'Starting…';
+                try {
+                    const response = await fetch('/convert', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: raw.name })
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || response.statusText);
+                } catch (err) {
+                    button.disabled = false;
+                    button.textContent = 'Make SOG copy';
+                    row.append(el('span', 'note', `could not start: ${err.message}`));
+                    return;
+                }
+                render({ quiet: true });
+            };
+
+            let pollTimer = null;
+            const render = async ({ quiet = false } = {}) => {
+                clearTimeout(pollTimer);
+                const scrollPosition = window.scrollY;
+                if (!quiet) {
+                    list.replaceChildren(el('div', 'status', 'Loading…'));
+                    count.textContent = '';
+                }
+                let scenes;
+                try {
+                    scenes = await catalog.load();
+                } catch (err) {
+                    list.replaceChildren(el('div', 'error', `Could not list the scene folder (${err.message}). Is serve_for_quest.mjs running?`));
+                    return;
+                }
+                count.textContent = `${scenes.length} scene${scenes.length === 1 ? '' : 's'}`;
+                if (!scenes.length) {
+                    list.replaceChildren(el('div', 'empty', 'No scenes yet. Drop a .ply into 3DGS_scenes and press Reload list.'));
+                    return;
+                }
+                list.replaceChildren(...scenes.map(card));
+                window.scrollTo(0, scrollPosition);
+                // while a conversion runs, refresh every 3 s so the SOG button appears when it is done
+                if (scenes.some((scene) => scene.converting)) pollTimer = setTimeout(() => render({ quiet: true }), 3000);
+            };
+
+            // on the plain http address, point at the https one (VR only works there)
+            if (location.protocol === 'http:') {
+                fetch('/server_info.json').then((r) => r.json()).then(({ httpsPort }) => {
+                    const box = document.getElementById('vrLink');
+                    const url = `https://${location.hostname}:${httpsPort}/`;
+                    box.replaceChildren('You are on the plain http address, where the VR button is not available. For VR open ');
+                    const a = el('a', null, url);
+                    a.href = url;
+                    box.append(a, ' (Apple devices: install the ', Object.assign(el('a', null, 'certificate'), { href: '/certificate/' }), ' first).');
+                    box.hidden = false;
+                }).catch(() => {});
+            }
+
+            document.getElementById('reload').addEventListener('click', () => render());
+            render();
+        })();
+    </script>
+</body>
+</html>

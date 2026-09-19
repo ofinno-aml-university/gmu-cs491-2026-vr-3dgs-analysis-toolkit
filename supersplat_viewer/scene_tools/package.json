@@ -1,0 +1,8 @@
+{
+    "name": "scene_tools",
+    "private": true,
+    "description": "Converter used by convert_scenes_to_sog.sh (PlayCanvas splat-transform)",
+    "dependencies": {
+        "@playcanvas/splat-transform": "3.4.2"
+    }
+}
