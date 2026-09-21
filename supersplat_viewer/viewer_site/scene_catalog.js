@@ -140,9 +140,28 @@
         return list;
     };
 
-    // The viewer page for one format. `webgl` is required for VR on the Quest; the content path is
-    // already percent-encoded, so encode it once more as a query value.
-    const viewerUrl = (format) => `/viewer/index.html?webgl&content=${encodeURIComponent(format.url)}`;
+    // Backend choice for the links: 'webgpu' (default) or 'webgl'. The viewer never falls back, so
+    // the flag in the address is the whole decision. The list page stores the choice per browser.
+    const BACKEND_KEY = 'viewer_backend';
+    const currentBackend = () => {
+        try {
+            return localStorage.getItem(BACKEND_KEY) === 'webgl' ? 'webgl' : 'webgpu';
+        } catch (err) {
+            return 'webgpu';
+        }
+    };
+    const setBackend = (backend) => {
+        try {
+            localStorage.setItem(BACKEND_KEY, backend === 'webgl' ? 'webgl' : 'webgpu');
+        } catch (err) {
+            // storage unavailable: the choice just does not persist
+        }
+    };
 
-    window.sceneCatalog = { load, viewerUrl, LARGE_RAW_BYTES, SCENE_DIR, CONVERTED_DIR };
+    // The viewer page for one format on the given backend. The content path is already
+    // percent-encoded, so encode it once more as a query value.
+    const viewerUrl = (format, backend = currentBackend()) =>
+        `/viewer/index.html?${backend === 'webgl' ? 'webgl&' : ''}content=${encodeURIComponent(format.url)}`;
+
+    window.sceneCatalog = { load, viewerUrl, currentBackend, setBackend, LARGE_RAW_BYTES, SCENE_DIR, CONVERTED_DIR };
 })();

@@ -47,6 +47,8 @@
             // ?content= override replaces the url it describes.
             const contentFilename = url.searchParams.has('content') ? null : (bootstrap.contentFilename ?? null);
 
+            // The backend is an explicit choice per page load and never falls back: WebGPU by
+            // default, WebGL2 with ?webgl. createApp in index.ts refuses any other device.
             const renderer = url.searchParams.has('webgl') ? 'webgl' : 'webgpu';
 
             const budgetParam = url.searchParams.get('budget');

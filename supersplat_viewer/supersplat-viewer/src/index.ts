@@ -97,13 +97,15 @@ const loadSkybox = (app: AppBase, url: string) => {
 };
 
 const createApp = async (canvas: HTMLCanvasElement, config: Config) => {
-    const useWebGPU = config.renderer === 'webgpu';
-
-    // Create the graphics device. The engine auto-appends WebGL2/null fallbacks
-    // when WebGPU isn't supported. Request xrCompatible so the device — WebGPU
-    // (via XRGPUBinding) or the WebGL fallback — is usable for AR/VR.
+    // The backend is exactly the one requested (WebGPU by default, WebGL2 with ?webgl) and never
+    // falls back. createGraphicsDevice appends WebGL2 and null fallbacks to deviceTypes on its own
+    // with no option to disable that, so the created device is checked afterwards and anything
+    // else is refused: the reason is written on screen and startup stops. xrCompatible makes the
+    // device usable for AR/VR (via XRGPUBinding on WebGPU).
+    const wanted = config.renderer;
+    const expectedType = wanted === 'webgpu' ? 'webgpu' : 'webgl2';
     const device = await createGraphicsDevice(canvas, {
-        deviceTypes: useWebGPU ? ['webgpu'] : [],
+        deviceTypes: [expectedType],
         antialias: false,
         depth: true,
         stencil: false,
@@ -111,11 +113,25 @@ const createApp = async (canvas: HTMLCanvasElement, config: Config) => {
         powerPreference: 'high-performance'
     });
 
-    console.log(`Renderer: ${device.deviceType}`);
+    console.log(`Renderer: ${device.deviceType} (requested ${wanted})`);
 
-    // The engine may have fallen back from WebGPU to WebGL2; downstream code
-    // (voxel overlay, XR, gsplat renderer selection) needs the *actual* renderer.
-    const renderer: 'webgl' | 'webgpu' = device.deviceType === 'webgpu' ? 'webgpu' : 'webgl';
+    if (device.deviceType !== expectedType) {
+        let message: string;
+        if (wanted === 'webgpu') {
+            const hasWebGpuApi = Boolean((navigator as { gpu?: unknown }).gpu);
+            message = hasWebGpuApi
+                ? `WebGPU is required: the browser exposes WebGPU but no WebGPU device could be created (got "${device.deviceType}"). This viewer does not fall back to WebGL; add ?webgl to choose WebGL2 explicitly.`
+                : 'WebGPU is required: this browser does not expose WebGPU, or it is disabled. This viewer does not fall back to WebGL; add ?webgl to choose WebGL2 explicitly.';
+        } else {
+            message = `WebGL2 was requested (?webgl) but no WebGL2 device could be created (got "${device.deviceType}").`;
+        }
+        device.destroy();
+        const loadingText = document.getElementById('loadingText');
+        if (loadingText) loadingText.textContent = message;
+        throw new Error(message);
+    }
+
+    const renderer: 'webgl' | 'webgpu' = wanted;
 
     // Set maxPixelRatio so the XR framebuffer scale factor is computed correctly.
     // Regular rendering bypasses maxPixelRatio via the custom initCanvas sizing.
@@ -291,8 +307,7 @@ const main = async (canvas: HTMLCanvasElement, settingsJson: unknown, config: Co
 
     camera.addComponent('camera');
 
-    // Initialize XR support (any backend; when the current device can't host a
-    // session the UI can offer a reload into WebGL instead)
+    // Initialize XR support on the chosen device (no reload into another backend)
     initXr(global);
 
     // Initialize user interface

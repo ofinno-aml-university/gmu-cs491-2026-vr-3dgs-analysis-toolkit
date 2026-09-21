@@ -471,32 +471,15 @@ const initUI = (global: Global) => {
     const arChanged = () => dom.arMode.classList[state.hasAR ? 'remove' : 'add']('hidden');
     const vrChanged = () => dom.vrMode.classList[state.hasVR ? 'remove' : 'add']('hidden');
 
-    // When a session can't start on the current (WebGPU) device but would work on
-    // WebGL, prompt the user to reload the viewer with the WebGL renderer before
-    // starting AR/VR. Use replace() so the renderer-switch reload doesn't add a
-    // back-button entry — important because the viewer often runs inside an
-    // iframe (e.g. superspl.at /scene).
-    const reloadWithWebgl = () => {
-        const reloadUrl = new URL(location.href);
-        reloadUrl.searchParams.set('webgl', '');
-        location.replace(reloadUrl.toString());
-    };
-
-    const showXrModal = () => dom.xrModal.classList.remove('hidden');
-    const hideXrModal = () => dom.xrModal.classList.add('hidden');
-
-    dom.xrModalOk.addEventListener('click', reloadWithWebgl);
-    dom.xrModalCancel.addEventListener('click', hideXrModal);
-    dom.xrModal.addEventListener('pointerdown', hideXrModal);
-
+    // The AR/VR buttons are visible only when the session can start on the device the page was
+    // opened with, so a click starts it directly. There is no reload into another backend (the
+    // "WebGL required" modal in the markup is never shown); ?webgl chooses WebGL2 explicitly.
     const handleXrClick = (type: 'AR' | 'VR') => {
-        // Availability is backend-aware: when the session can start on the current
-        // device (WebGPU included), start it directly. Otherwise the button is only
-        // visible because the session would work on WebGL, so offer the reload.
-        if (global.app.xr.isAvailable(type === 'AR' ? 'immersive-ar' : 'immersive-vr')) {
+        const mode = type === 'AR' ? 'immersive-ar' : 'immersive-vr';
+        if (global.app.xr.isAvailable(mode)) {
             events.fire(type === 'AR' ? 'startAR' : 'startVR');
         } else {
-            showXrModal();
+            console.warn(`${mode} is not available on the ${global.renderer} device; this viewer does not fall back to another backend`);
         }
     };
 

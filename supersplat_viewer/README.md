@@ -43,6 +43,18 @@ Node.js and works the same on macOS, Windows and Linux.
 Plain `http://<address>:3080/` also works for non-VR viewing on any device, but the VR button only
 appears on the `https` address (WebXR requires a secure origin).
 
+### Choosing the backend (WebGPU or WebGL2)
+
+The backend is an explicit choice and the viewer never falls back from one to the other, in 2D
+or in VR. WebGPU is the default; `?webgl` in the viewer address chooses WebGL2. If the chosen
+backend is unavailable the viewer refuses to start and says why on the page. The **Backend**
+switch on the scene list applies the choice to every link and is remembered per browser; inside
+the viewer, the scene drop-down keeps the current backend and has a "Reload this scene on ..."
+entry for the other one. The badge under the drop-down shows the device actually in use (green
+for WebGPU, amber for WebGL2), the splat sort path (GPU sort on WebGPU, CPU sort worker on
+WebGL2), and whether a VR session can start on that device. Use it to A/B the two backends: same
+scene, same format, same performance-mode setting, one backend at a time.
+
 ### Apple Vision Pro, iPhone, iPad
 
 Safari does not offer a reliable way past the certificate warning, and it also refuses a
@@ -97,8 +109,10 @@ in `3DGS_scenes_converted/conversion.log`. The converted folder can be deleted a
 
     3DGS_scenes/               scenes you drop in (served as-is; provided separately, never committed)
     3DGS_scenes_converted/     optional SOG copies made by convert_scenes_to_sog.mjs (not committed)
-    supersplat-viewer/         the viewer's source: a copy of release v1.31.2 (commit 96f6251) of
-                               https://github.com/playcanvas/supersplat-viewer, unmodified
+    supersplat-viewer/         the viewer's source: release v1.31.2 (commit 96f6251) of
+                               https://github.com/playcanvas/supersplat-viewer, changed only so
+                               the backend is explicit with no fallback (index.ts, index.html,
+                               xr.ts, ui.ts)
     viewer_site/               the web pages around the viewer:
         index.html                 scene list page
         scene_catalog.js           reads the folder listing (shared by the list and the drop-down)
@@ -118,8 +132,8 @@ or copies to keep in sync. The ports are two constants at the top of `serve_for_
 
 ## Working on the viewer code
 
-The viewer is the unmodified `supersplat-viewer` release; the scene list and drop-down live outside
-it. To change the viewer:
+The viewer is the `supersplat-viewer` release with one local change (explicit backend, no
+fallback); the scene list and drop-down live outside it. To change the viewer:
 
     cd supersplat-viewer
     npm run build        # or: npm run watch   (rebuilds on every save)
@@ -130,7 +144,7 @@ Reload the page on the Quest afterwards; the server reads the build output direc
 
 A scene can also be opened directly, without the list:
 
-    https://<address>:3443/viewer/index.html?webgl&content=/3DGS_scenes/Kitty.ply
+    https://<address>:3443/viewer/index.html?content=/3DGS_scenes/Kitty.ply
 
 The viewer's other URL parameters (`ministats`, `noanim`, `noui`, ...) are listed in
 `supersplat-viewer/README.md`.
@@ -143,7 +157,11 @@ The viewer's other URL parameters (`ministats`, `noanim`, `noui`, ...) are liste
   setup uses 3443/3080.)
 - **The Quest cannot connect at all**: check both devices are on the same Wi-Fi, and on Windows
   that the firewall allowed Node (Windows Security → Firewall → Allow an app).
-- **No VR button**: you opened the `http` address, or the URL lacks `?webgl` (the list adds it).
+- **No VR button**: you opened the `http` address, or the browser cannot start WebXR on the
+  chosen device (the badge under the drop-down says "VR: not available"). The viewer does not
+  fall back to the other backend, by design; pick the other one with the Backend switch.
+- **"WebGPU is required" on the page**: the browser has no WebGPU or it is disabled; choose
+  WebGL2 with the Backend switch (or `?webgl`) instead.
 - **Certificate warning every visit (Quest)**: expected with a self-signed certificate; proceed.
   Apple devices: install the certificate as described above.
 - **Certificate expired or the computer's address changed**: run `node make_certificate.mjs`

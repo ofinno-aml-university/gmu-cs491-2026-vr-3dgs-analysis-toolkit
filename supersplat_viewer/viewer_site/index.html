@@ -14,6 +14,8 @@
         button, a.button { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; border-radius: 10px; border: 1px solid #3a3d44; background: #1c1e23; color: #e8e8e8; font: inherit; text-decoration: none; cursor: pointer; }
         a.button.primary { background: #f26722; border-color: #f26722; color: #fff; font-weight: 600; }
         button.make { border-style: dashed; }
+        label.backend { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: #a9adb5; font-size: 15px; }
+        label.backend select { min-height: 48px; padding: 0 12px; border-radius: 10px; border: 1px solid #3a3d44; background: #1c1e23; color: #e8e8e8; font: inherit; }
         button:disabled { opacity: 0.6; cursor: default; }
         a.button:hover, button:hover { filter: brightness(1.15); }
         .card { background: #17191d; border: 1px solid #2a2d33; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
@@ -37,10 +39,18 @@
         <div class="toolbar">
             <button id="reload" type="button">Reload list</button>
             <span id="count" class="status"></span>
+            <label class="backend">Backend
+                <select id="backend">
+                    <option value="webgpu">WebGPU (default)</option>
+                    <option value="webgl">WebGL2</option>
+                </select>
+            </label>
+            <span id="backendNote" class="status"></span>
         </div>
         <div id="list"></div>
         <footer>
             <p><strong>Adding scenes:</strong> drop a <code>.ply</code> (or <code>.compressed.ply</code>, <code>.sog</code>) into the <code>3DGS_scenes</code> folder on the computer that runs the server, then press Reload list. A <code>.txt</code> with the same name (lines <code>Title:</code>, <code>Author:</code>, <code>License:</code>, <code>Source:</code>) becomes the caption.</p>
+            <p><strong>Backend:</strong> the switch above chooses WebGPU (default) or WebGL2 for every link; the viewer never falls back from one to the other, and refuses to start if the chosen one is unavailable. Inside the viewer, the scene drop-down keeps the current backend and offers a reload on the other one, and the small badge under it shows the device actually in use.</p>
             <p><strong>Apple headsets and phones:</strong> Safari does not let you click past the certificate warning the way the Quest browser does. Open <a href="/certificate/">the certificate page</a> once from the plain <code>http://</code> address (port 3080), install the certificate as described there, and the <code>https</code> address then opens normally.</p>
             <p><strong>SOG option:</strong> the raw PLY is always the default. <em>Make SOG copy</em> asks the computer running the server to write a compact, lossy <code>.sog</code> copy of that PLY into <code>3DGS_scenes_converted</code> (seconds to a minute); it then shows up here as an extra <em>Open SOG</em> button. The same for every scene at once: <code>node convert_scenes_to_sog.mjs</code> on that computer.</p>
         </footer>
@@ -168,6 +178,22 @@
                     box.hidden = false;
                 }).catch(() => {});
             }
+
+            // backend switch: remembered per browser; every scene link carries the choice
+            const backendSelect = document.getElementById('backend');
+            const backendNote = document.getElementById('backendNote');
+            const showBackend = () => {
+                backendSelect.value = catalog.currentBackend();
+                backendNote.textContent = backendSelect.value === 'webgl'
+                    ? 'links open the viewer on WebGL2 (?webgl); no fallback either way'
+                    : 'links open the viewer on WebGPU; no fallback either way';
+            };
+            backendSelect.addEventListener('change', () => {
+                catalog.setBackend(backendSelect.value);
+                showBackend();
+                render({ quiet: true });
+            });
+            showBackend();
 
             document.getElementById('reload').addEventListener('click', () => render());
             render();
