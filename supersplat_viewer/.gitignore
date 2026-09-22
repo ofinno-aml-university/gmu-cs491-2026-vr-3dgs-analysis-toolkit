@@ -1,5 +1,7 @@
-# 3DGS scenes (and their .sog copies) are provided separately and are never committed
-3DGS_scenes/
+# 3DGS scenes (and their .sog copies) are provided separately and are never committed;
+# only the folder's own README is tracked so the folder exists in a fresh clone
+3DGS_scenes/*
+!3DGS_scenes/README.md
 # written by convert_scenes_to_sog.mjs
 conversion.log
 # HTTPS certificate and private key: create per computer with `node make_certificate.mjs`
