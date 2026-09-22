@@ -1,21 +1,26 @@
 #!/usr/bin/env node
-// Converts every .ply in 3DGS_scenes/ to a .sog in 3DGS_scenes_converted/ using PlayCanvas
-// splat-transform (installed in scene_tools/). SOG is roughly 10x smaller than a raw PLY and much
-// cheaper for the Quest to load. The raw file is left untouched; a .sog is skipped when it is
-// already up to date. Plain Node; works the same on macOS, Windows and Linux.
+// Converts .ply files in 3DGS_scenes/ to .sog files in the same folder (kitty.ply -> kitty.sog)
+// using PlayCanvas splat-transform (installed in scene_tools/). SOG is roughly 10x smaller than a
+// raw PLY and much cheaper for the Quest to load. The raw file is left untouched. Plain Node;
+// works the same on macOS, Windows and Linux.
 //
-//   node convert_scenes_to_sog.mjs                 convert whatever is missing or stale, then exit
-//   node convert_scenes_to_sog.mjs --watch         keep checking every 30 s for new or changed files
-//   node convert_scenes_to_sog.mjs --file Kitty.ply   convert one file (used by the "Make SOG copy"
-//                                                  button on the scene list, via serve_for_quest.mjs)
+//   node convert_scenes_to_sog.mjs                 convert every PLY that has no .sog yet, then exit
+//   node convert_scenes_to_sog.mjs --watch         keep checking every 30 s for new files
+//   node convert_scenes_to_sog.mjs --file kitty.ply [--force]
+//                                                  convert one file (used by the "Make SOG copy"
+//                                                  button on the scene list, via serve_for_quest.mjs);
+//                                                  --force replaces an existing kitty.sog
 //
-// This is optional and never runs on its own: the raw PLY stays the default in the scene list, and
-// a .sog only appears there as an extra button. SOG is lossy (quantized positions, scales and
-// rotations; palettized spherical harmonics), so do not use it for compression experiments.
+// An existing .sog is never overwritten except with --force, so a .sog someone drops into the
+// folder themselves is safe. This is optional and never runs on its own: the raw PLY stays the
+// default in the scene list, and a .sog only appears there as an extra button. SOG is lossy
+// (quantized positions, scales and rotations; palettized spherical harmonics), so do not use it
+// for compression experiments.
 //
-// While a file converts, <name>.converting exists next to the output; a failure leaves
-// <name>.failed.txt with the error. The scene list shows both states. Smallest files go first, and
-// a file modified less than a minute ago is left for the next pass (it may still be copying).
+// While a file converts, <name>.converting exists next to it; a failure leaves <name>.failed.txt
+// with the error. The scene list shows both states. Progress is logged to conversion.log next to
+// this script. Smallest files go first, and a file modified less than a minute ago is left for the
+// next pass (it may still be copying).
 import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, openSync, closeSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -26,8 +31,8 @@ const SETTLE_MS = 60_000;
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const sourceDir = path.join(root, '3DGS_scenes');
-const outputDir = path.join(root, '3DGS_scenes_converted');
-const logFile = path.join(outputDir, 'conversion.log');
+const outputDir = sourceDir; // copies live next to their PLY
+const logFile = path.join(root, 'conversion.log');
 
 // the converter's entry script, run with this same Node (no shell shims, so it works on Windows)
 const resolveConverter = () => {
@@ -72,7 +77,7 @@ const abort = () => {
 process.on('SIGINT', abort);
 process.on('SIGTERM', abort);
 
-const convertOne = (converter, ply) => new Promise((resolve) => {
+const convertOne = (converter, ply, force = false) => new Promise((resolve) => {
     const stem = path.basename(ply, '.ply');
     const sog = path.join(outputDir, `${stem}.sog`);
     const marker = path.join(outputDir, `${stem}.converting`);
@@ -80,9 +85,11 @@ const convertOne = (converter, ply) => new Promise((resolve) => {
     const tmp = path.join(outputDir, `${stem}.tmp.sog`);
     const plyTime = statSync(ply).mtimeMs;
 
-    // already converted from this version of the file, or already failed on this version
-    if (existsSync(sog) && plyTime <= statSync(sog).mtimeMs) return resolve('skipped');
-    if (existsSync(failed) && plyTime <= statSync(failed).mtimeMs) return resolve('skipped');
+    // never overwrite an existing .sog (it may be someone's own file) unless explicitly forced;
+    // a previous failure on this same version of the PLY is not retried without --force either
+    if (existsSync(sog) && !force) return resolve('skipped');
+    if (existsSync(failed) && plyTime <= statSync(failed).mtimeMs && !force) return resolve('skipped');
+    rmSync(failed, { force: true });
 
     log(`converting  ${stem}   (raw ${formatSize(statSync(ply).size)})`);
     writeFileSync(marker, '');
@@ -141,7 +148,7 @@ const main = async () => {
         const ply = name && path.join(sourceDir, path.basename(name));
         if (!ply || !existsSync(ply) || !ply.toLowerCase().endsWith('.ply')) throw new Error(`no such .ply in 3DGS_scenes: ${name}`);
         await waitUntilStable(ply);
-        const result = await convertOne(converter, ply);
+        const result = await convertOne(converter, ply, process.argv.includes('--force'));
         process.exit(result === 'failed' ? 1 : 0);
     }
 

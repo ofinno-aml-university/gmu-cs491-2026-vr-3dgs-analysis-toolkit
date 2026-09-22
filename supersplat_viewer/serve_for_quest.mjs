@@ -13,11 +13,12 @@
 //   /scene_catalog.js      viewer_site/
 //   /viewer/...            viewer_site/viewer/              (generated page, drop-down, settings)
 //                          then supersplat-viewer/public/   (the built viewer: index.js, index.css)
-//   /3DGS_scenes/...       3DGS_scenes/                     (a folder URL returns a JSON listing)
-//   /3DGS_scenes_converted/...   3DGS_scenes_converted/     (same)
+//   /3DGS_scenes/...       3DGS_scenes/                     (a folder URL returns a JSON listing;
+//                                                           .ply and .sog files live side by side)
 //   /certificate/          a page to install the HTTPS certificate on Apple devices (see README)
-//   POST /convert          {"name": "Kitty.ply"}: make a SOG copy of that scene (the "Make SOG copy"
-//                          button); runs convert_scenes_to_sog.mjs for one file at a time
+//   POST /convert          {"name": "kitty.ply", "force": false}: make kitty.sog next to the PLY
+//                          (the "Make SOG copy" button); runs convert_scenes_to_sog.mjs for one
+//                          file at a time; force replaces an existing copy
 //
 // Scenes are served as-is. Windows: on the first start Windows Defender Firewall asks whether
 // Node may accept connections; allow it for private networks or the Quest cannot connect.
@@ -38,14 +39,12 @@ const HTTP_PORT = 3080;
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const sceneDir = path.join(root, '3DGS_scenes');
-const convertedDir = path.join(root, '3DGS_scenes_converted');
 const tlsDir = path.join(root, 'tls_self_signed');
 
 // URL prefix -> folders searched in order. The longest matching prefix wins.
 const mounts = [
     { prefix: '/viewer/', roots: [path.join(root, 'viewer_site', 'viewer'), path.join(root, 'supersplat-viewer', 'public')], listing: false },
     { prefix: '/3DGS_scenes/', roots: [sceneDir], listing: true },
-    { prefix: '/3DGS_scenes_converted/', roots: [convertedDir], listing: true },
     { prefix: '/', roots: [path.join(root, 'viewer_site')], listing: false }
 ];
 
@@ -157,10 +156,10 @@ let conversionRunning = null;
 
 const runNextConversion = () => {
     if (conversionRunning || conversionQueue.length === 0) return;
-    const name = conversionQueue.shift();
+    const { name, force } = conversionQueue.shift();
     conversionRunning = name;
-    console.log(`${new Date().toLocaleTimeString()}  converting ${name} -> SOG (log: 3DGS_scenes_converted/conversion.log)`);
-    const child = spawn(process.execPath, [converterScript, '--file', name], { stdio: 'ignore' });
+    console.log(`${new Date().toLocaleTimeString()}  converting ${name} -> SOG${force ? ' (replacing the existing copy)' : ''} (log: conversion.log)`);
+    const child = spawn(process.execPath, [converterScript, '--file', name, ...(force ? ['--force'] : [])], { stdio: 'ignore' });
     const finish = (text) => {
         console.log(`${new Date().toLocaleTimeString()}  ${name}: ${text}`);
         conversionRunning = null;
@@ -170,7 +169,7 @@ const runNextConversion = () => {
     child.on('exit', (code) => finish(code === 0 ? 'SOG copy ready' : `conversion FAILED (status ${code})`));
 };
 
-const requestConversion = async (name) => {
+const requestConversion = async (name, force = false) => {
     const lower = typeof name === 'string' ? name.toLowerCase() : '';
     if (!lower.endsWith('.ply') || lower.endsWith('.compressed.ply') || /[\\/]/.test(name) || name.startsWith('.')) {
         return { code: 400, body: { error: 'not a convertible .ply file name' } };
@@ -183,18 +182,12 @@ const requestConversion = async (name) => {
     }
     if (!plyStat.isFile()) return { code: 404, body: { error: 'no such file in 3DGS_scenes' } };
     const stem = name.slice(0, -4);
-    try {
-        const sogStat = await fs.stat(path.join(convertedDir, `${stem}.sog`));
-        if (sogStat.mtimeMs >= plyStat.mtimeMs) return { code: 200, body: { status: 'exists' } };
-    } catch (err) {
-        // no copy yet
-    }
-    if (conversionRunning === name || conversionQueue.includes(name)) return { code: 202, body: { status: 'running' } };
-    mkdirSync(convertedDir, { recursive: true });
-    await fs.rm(path.join(convertedDir, `${stem}.failed.txt`), { force: true }); // an explicit request retries
-    await fs.writeFile(path.join(convertedDir, `${stem}.converting`), '');   // shown on the list while queued
+    if (!force && existsSync(path.join(sceneDir, `${stem}.sog`))) return { code: 200, body: { status: 'exists' } };
+    if (conversionRunning === name || conversionQueue.some((q) => q.name === name)) return { code: 202, body: { status: 'running' } };
+    await fs.rm(path.join(sceneDir, `${stem}.failed.txt`), { force: true }); // an explicit request retries
+    await fs.writeFile(path.join(sceneDir, `${stem}.converting`), '');   // shown on the list while queued
     const startsNow = !conversionRunning;
-    conversionQueue.push(name);
+    conversionQueue.push({ name, force: Boolean(force) });
     runNextConversion();
     return { code: 202, body: { status: startsNow ? 'started' : 'queued' } };
 };
@@ -229,7 +222,7 @@ const handle = async (request, response) => {
         } catch (err) {
             return send(response, 400, JSON.stringify({ error: err.message }), { 'Content-Type': 'application/json; charset=utf-8' });
         }
-        const result = await requestConversion(body.name);
+        const result = await requestConversion(body.name, body.force === true);
         return send(response, result.code, JSON.stringify(result.body), { 'Content-Type': 'application/json; charset=utf-8' });
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') return send(response, 405, 'method not allowed');
@@ -367,10 +360,9 @@ const main = async () => {
         console.warn(`WARNING: the HTTPS certificate expires in ${Math.ceil(daysLeft)} days (${certificate.validTo}). Run: node make_certificate.mjs`);
     }
     mkdirSync(sceneDir, { recursive: true });
-    if (existsSync(convertedDir)) {
-        for (const name of await fs.readdir(convertedDir)) {
-            if (name.endsWith('.converting') || name.endsWith('.tmp.sog')) await fs.rm(path.join(convertedDir, name), { force: true });
-        }
+    // conversion markers left by an interrupted run (no queue exists at start)
+    for (const name of await fs.readdir(sceneDir)) {
+        if (name.endsWith('.converting') || name.endsWith('.tmp.sog')) await fs.rm(path.join(sceneDir, name), { force: true });
     }
 
     // the viewer page is regenerated from the current build at every start

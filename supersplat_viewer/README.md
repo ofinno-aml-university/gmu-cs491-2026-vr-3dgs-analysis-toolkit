@@ -76,8 +76,9 @@ they change, run `node make_certificate.mjs`, restart the server and install the
 ## Adding scenes
 
 Drop a `.ply` file into `3DGS_scenes` (spaces in names are fine) and press **Reload list** on the
-page. `.compressed.ply` and `.sog` files work too. A text file with the same name, for example
-`Kitty.txt` next to `Kitty.ply`, is shown as the caption; use lines like
+page. `.compressed.ply` and `.sog` files work too, and files sharing a name are one scene:
+`kitty.ply` and `kitty.sog` give one card with a PLY button and a SOG button. A text file with
+the same name, for example `kitty.txt`, is shown as the caption; use lines like
 
     Title: Kitty
     Author: ...
@@ -93,22 +94,24 @@ several hundred MB are common. The Quest browser has limited memory, and the lis
 above 250 MB. If a scene fails to load on the Quest, make a compact copy of it: press
 **Make SOG copy** on that scene in the list. The computer running the server converts the file
 (seconds to a minute; a 1.16 GB PLY took 53 s on a MacBook Pro), the row shows "converting…"
-meanwhile, and an **Open SOG** button appears when it is done. Copies land in
-`3DGS_scenes_converted/<name>.sog`, roughly 10 to 20 times smaller than the PLY. To convert every
-scene at once instead, run this on the serving computer:
+meanwhile, and an **Open SOG** button appears when it is done. The copy is written next to the
+PLY as `3DGS_scenes/<name>.sog`, roughly 10 to 20 times smaller. To convert every scene that has
+no copy yet, run this on the serving computer:
 
     node convert_scenes_to_sog.mjs
 
-(`--watch` keeps it running and converts new files as they appear.) SOG is a lossy format
-(quantized positions, scales and rotations, palettized spherical harmonics), so keep using the PLY
-for anything related to compression work. Nothing is converted unless someone asks for it, one
-file at a time. If a conversion fails, the row says so and offers **Retry SOG copy**; the reason is
-in `3DGS_scenes_converted/conversion.log`. The converted folder can be deleted at any time.
+(`--watch` keeps it running and converts new files as they appear.) An existing `.sog` is never
+overwritten by the script, so a `.sog` you drop in yourself is safe; when a copy is older than
+its PLY the list offers **Remake SOG copy**, which replaces it. SOG is a lossy format (quantized
+positions, scales and rotations, palettized spherical harmonics), so keep using the PLY for
+anything related to compression work. Nothing is converted unless someone asks for it, one file
+at a time. If a conversion fails, the row says so and offers **Retry SOG copy**; the reason is in
+`conversion.log` next to the scripts. Deleting a `.sog` simply removes its button.
 
 ## Folder layout
 
-    3DGS_scenes/               scenes you drop in (served as-is; provided separately, never committed)
-    3DGS_scenes_converted/     optional SOG copies made by convert_scenes_to_sog.mjs (not committed)
+    3DGS_scenes/               scenes you drop in, and the optional .sog copies next to them
+                               (served as-is; provided separately, never committed)
     supersplat-viewer/         the viewer's source: release v1.31.2 (commit 96f6251) of
                                https://github.com/playcanvas/supersplat-viewer, changed only so
                                the backend is explicit with no fallback (index.ts, index.html,
@@ -129,6 +132,7 @@ in `3DGS_scenes_converted/conversion.log`. The converted folder can be deleted a
 The server maps URLs to folders directly (`/viewer/` is served from `viewer_site/viewer/` and then
 from `supersplat-viewer/public/`; `/3DGS_scenes/` from `3DGS_scenes/`), so there are no symlinks
 or copies to keep in sync. The ports are two constants at the top of `serve_for_quest.mjs`.
+`conversion.log` (written by the converter) is not committed.
 
 ## Working on the viewer code
 
@@ -144,7 +148,7 @@ Reload the page on the Quest afterwards; the server reads the build output direc
 
 A scene can also be opened directly, without the list:
 
-    https://<address>:3443/viewer/index.html?content=/3DGS_scenes/Kitty.ply
+    https://<address>:3443/viewer/index.html?content=/3DGS_scenes/kitty.ply
 
 The viewer's other URL parameters (`ministats`, `noanim`, `noui`, ...) are listed in
 `supersplat-viewer/README.md`.

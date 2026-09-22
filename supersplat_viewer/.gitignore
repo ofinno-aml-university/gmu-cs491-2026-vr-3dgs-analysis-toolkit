@@ -1,6 +1,7 @@
-# 3DGS scenes are provided separately and are never committed
+# 3DGS scenes (and their .sog copies) are provided separately and are never committed
 3DGS_scenes/
-3DGS_scenes_converted/
+# written by convert_scenes_to_sog.mjs
+conversion.log
 # HTTPS certificate and private key: create per computer with `node make_certificate.mjs`
 tls_self_signed/
 # generated from the built viewer at every server start

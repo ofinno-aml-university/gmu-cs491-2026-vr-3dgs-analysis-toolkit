@@ -49,10 +49,10 @@
         </div>
         <div id="list"></div>
         <footer>
-            <p><strong>Adding scenes:</strong> drop a <code>.ply</code> (or <code>.compressed.ply</code>, <code>.sog</code>) into the <code>3DGS_scenes</code> folder on the computer that runs the server, then press Reload list. A <code>.txt</code> with the same name (lines <code>Title:</code>, <code>Author:</code>, <code>License:</code>, <code>Source:</code>) becomes the caption.</p>
+            <p><strong>Adding scenes:</strong> drop a <code>.ply</code> (or <code>.compressed.ply</code>, <code>.sog</code>) into the <code>3DGS_scenes</code> folder on the computer that runs the server, then press Reload list. Files with the same name are one scene (<code>kitty.ply</code> and <code>kitty.sog</code> give one card with two buttons); a <code>.txt</code> with the same name (lines <code>Title:</code>, <code>Author:</code>, <code>License:</code>, <code>Source:</code>) becomes the caption.</p>
             <p><strong>Backend:</strong> the switch above chooses WebGPU (default) or WebGL2 for every link; the viewer never falls back from one to the other, and refuses to start if the chosen one is unavailable. Inside the viewer, the scene drop-down keeps the current backend and offers a reload on the other one, and the small badge under it shows the device actually in use.</p>
             <p><strong>Apple headsets and phones:</strong> Safari does not let you click past the certificate warning the way the Quest browser does. Open <a href="/certificate/">the certificate page</a> once from the plain <code>http://</code> address (port 3080), install the certificate as described there, and the <code>https</code> address then opens normally.</p>
-            <p><strong>SOG option:</strong> the raw PLY is always the default. <em>Make SOG copy</em> asks the computer running the server to write a compact, lossy <code>.sog</code> copy of that PLY into <code>3DGS_scenes_converted</code> (seconds to a minute); it then shows up here as an extra <em>Open SOG</em> button. The same for every scene at once: <code>node convert_scenes_to_sog.mjs</code> on that computer.</p>
+            <p><strong>SOG option:</strong> the raw PLY is always the default. <em>Make SOG copy</em> asks the computer running the server to write a compact, lossy <code>.sog</code> copy next to that PLY (seconds to a minute); it then shows up here as an extra <em>Open SOG</em> button. An existing <code>.sog</code> is never overwritten unless you press <em>Remake SOG copy</em>. The same for every scene at once: <code>node convert_scenes_to_sog.mjs</code> on that computer.</p>
         </footer>
     </main>
     <script src="/scene_catalog.js"></script>
@@ -106,10 +106,16 @@
                 } else if (raw && (!hasSog || scene.failed)) {
                     const make = el('button', 'button make', scene.failed ? 'Retry SOG copy' : 'Make SOG copy');
                     make.type = 'button';
-                    make.title = 'Writes a compact, lossy .sog copy on the computer running the server; the PLY is kept';
-                    make.addEventListener('click', () => requestSog(raw, make, row));
+                    make.title = 'Writes a compact, lossy .sog copy next to the PLY on the computer running the server; the PLY is kept';
+                    make.addEventListener('click', () => requestSog(raw, make, row, scene.failed));
                     row.append(make);
-                    if (scene.failed) row.append(el('span', 'status', `last conversion failed (see 3DGS_scenes_converted/${scene.stem}.failed.txt)`));
+                    if (scene.failed) row.append(el('span', 'status', `last conversion failed (see 3DGS_scenes/${scene.stem}.failed.txt)`));
+                } else if (raw && scene.staleSog) {
+                    const remake = el('button', 'button make', 'Remake SOG copy');
+                    remake.type = 'button';
+                    remake.title = 'The .sog is older than the .ply; replaces it with a fresh copy';
+                    remake.addEventListener('click', () => requestSog(raw, remake, row, true));
+                    row.append(remake, el('span', 'status', 'the SOG copy is older than the PLY'));
                 }
                 box.append(row);
 
@@ -120,14 +126,14 @@
             };
 
             // ask the server to convert one PLY; the list then shows "converting…" and polls until done
-            const requestSog = async (raw, button, row) => {
+            const requestSog = async (raw, button, row, force = false) => {
                 button.disabled = true;
                 button.textContent = 'Starting…';
                 try {
                     const response = await fetch('/convert', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: raw.name })
+                        body: JSON.stringify({ name: raw.name, force })
                     });
                     const data = await response.json().catch(() => ({}));
                     if (!response.ok) throw new Error(data.error || response.statusText);
