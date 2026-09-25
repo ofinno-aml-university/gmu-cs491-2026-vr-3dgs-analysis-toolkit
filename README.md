@@ -36,20 +36,23 @@ The Fall semester focuses on understanding the codebase, validating interactions
 
 Desktop and WebXR emulation can support development, but stereo quality and controller interactions need testing on the headset.
 
-## Course milestones
+## Course assignments
 
-| Date | Checkpoint |
-| --- | --- |
-| October 2, 2026 | Project proposal |
-| November 20, 2026 | Proof of concept |
-| December 4, 2026 | Interim Program Review (IPR) and Spring implementation plan |
-| April 30, 2027 | Final demonstration |
+Copied from the Fall 2026 syllabus assignment table (August 16, 2026).
 
-IPR means **Interim Program Review**, the course progress review. These dates follow the Fall 2026 syllabus and instructor clarification; later course announcements take precedence. The team separately schedules its sponsor review. Plan a 30-minute sponsor meeting every two weeks, with the recurring slot agreed in the project Teams group chat.
+| Assignment | Date due | Description | Points | Team / individual |
+| --- | --- | --- | --- | --- |
+| Assignment 5. PoC Proposal | 2026-10-02 | Proof of Concept Study | 10 | Team |
+| Assignment 15. PoC Report | 2026-11-20 | Project Deliverable | 10 | Team |
+| Assignment 16. PoC Presentation | 2026-12-04 | Team pres w/indiv grades | 10 | Individual |
+| Assignment 19. Implementation Proposal | 2026-12-04 | Implement Solution | 10 | Team |
+| Assignment 21. Customer satisfaction | 2026-12-04 | Cust submits to prof | 14 | Individual |
+
+Spring class date on syllabus page 6: 2027-04-30 Presentation. The Fall assignment table does not assign an ID or points to this date. Weekly reports, monthly reports, the project notebook, professor satisfaction and attendance stay in the syllabus. Later course announcements take precedence over this page.
 
 ## Collaboration and contact
 
-Use the **project Teams group chat** for coordination and sponsor questions. Keep technical tasks, decisions and reproducible bug reports in GitHub Issues; submit changes through pull requests with a short description and validation evidence. Agree on the review workflow with the project contacts.
+Use the **project Teams group chat** for coordination and sponsor questions. Plan a 30-minute sponsor meeting every two weeks, with the recurring slot agreed in that chat. The team separately schedules its sponsor review. Keep technical tasks, decisions and reproducible bug reports in GitHub Issues; submit changes through pull requests with a short description and validation evidence. Agree on the review workflow with the project contacts.
 
 Ofinno project contacts: **Stephen**. Student team: **Team Parallax (4 students)**.
 
